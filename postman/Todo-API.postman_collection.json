@@ -1,0 +1,1330 @@
+{
+	"info": {
+		"_postman_id": "3f6b8f0e-6c1a-4f43-9a52-2d7c1b0e9a41",
+		"name": "Todo API",
+		"description": "ชุดทดสอบ RESTful API ของ Todo List (CRUD + validation)\n\nวิธีใช้:\n1. เปิด API server ก่อน (ค่าเริ่มต้น http://localhost:3000)\n2. Postman: Import ไฟล์นี้ แล้วกด Run collection\n3. Command line: npm run test:api (หรือ npx -y newman run postman/Todo-API.postman_collection.json)\n\nถ้า server ไม่ได้อยู่ที่ port 3000 ให้แก้ตัวแปร baseUrl ในแท็บ Variables ของ collection\nชุดทดสอบนี้ลบ todo ทุกตัวที่สร้างขึ้นเองเมื่อรันจบ จึงรันซ้ำได้ทั้งกับฐานข้อมูลว่างและที่มีข้อมูลอยู่แล้ว",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. CRUD (happy path)",
+			"description": "ทดสอบการใช้งานปกติครบวงจร: สร้าง > อ่าน > แก้ไข > ทำเครื่องหมายเสร็จ > ลบ (ต้องรันตามลำดับ)",
+			"item": [
+				{
+					"name": "Create todo",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// สร้างชื่อ todo ที่ไม่ซ้ำกันในแต่ละรอบ (ใช้ได้ทั้งตอน DB ว่างและมีข้อมูลอยู่แล้ว)",
+									"pm.variables.set(\"newTitle\", \"Postman test todo \" + Date.now());"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"  pm.response.to.have.status(201);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is a Todo object\", function () {",
+									"  const todo = pm.response.json();",
+									"  pm.expect(todo).to.have.all.keys(\"id\", \"title\", \"completed\", \"createdAt\", \"updatedAt\");",
+									"  pm.expect(todo.id).to.be.a(\"number\");",
+									"  pm.expect(todo.title).to.be.a(\"string\");",
+									"  pm.expect(todo.completed).to.be.a(\"boolean\");",
+									"  pm.expect(todo.createdAt).to.be.a(\"string\");",
+									"  pm.expect(todo.updatedAt).to.be.a(\"string\");",
+									"  pm.expect(Date.parse(todo.createdAt), \"createdAt is a valid date\").to.not.be.NaN;",
+									"  pm.expect(Date.parse(todo.updatedAt), \"updatedAt is a valid date\").to.not.be.NaN;",
+									"});",
+									"pm.test(\"Title is trimmed and completed is false\", function () {",
+									"  const todo = pm.response.json();",
+									"  pm.expect(todo.title).to.equal(pm.variables.get(\"newTitle\"));",
+									"  pm.expect(todo.completed).to.equal(false);",
+									"});",
+									"",
+									"// เก็บ id ของ todo ที่สร้างไว้ในตัวแปร todoId เพื่อใช้ใน request ถัดไป",
+									"if (pm.response.code === 201) {",
+									"  pm.collectionVariables.set(\"todoId\", pm.response.json().id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/todos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos"
+							]
+						},
+						"description": "สร้าง todo ใหม่ (ใส่ช่องว่างหน้า-หลังชื่อไว้ เพื่อทดสอบว่า server ตัดช่องว่างให้) ต้องได้ 201 และ completed = false จากนั้นเก็บ id ไว้ในตัวแปร todoId",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"   {{newTitle}}   \"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get all todos",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is an array of Todo objects\", function () {",
+									"  const todos = pm.response.json();",
+									"  pm.expect(todos).to.be.an(\"array\");",
+									"  todos.forEach((todo) => {",
+									"    pm.expect(todo).to.have.all.keys(\"id\", \"title\", \"completed\", \"createdAt\", \"updatedAt\");",
+									"    pm.expect(todo.id).to.be.a(\"number\");",
+									"    pm.expect(todo.title).to.be.a(\"string\");",
+									"    pm.expect(todo.completed).to.be.a(\"boolean\");",
+									"    pm.expect(todo.createdAt).to.be.a(\"string\");",
+									"    pm.expect(todo.updatedAt).to.be.a(\"string\");",
+									"    pm.expect(Date.parse(todo.createdAt), \"createdAt is a valid date\").to.not.be.NaN;",
+									"    pm.expect(Date.parse(todo.updatedAt), \"updatedAt is a valid date\").to.not.be.NaN;",
+									"  });",
+									"});",
+									"pm.test(\"List contains the todo we just created\", function () {",
+									"  const ids = pm.response.json().map((todo) => todo.id);",
+									"  pm.expect(ids).to.include(Number(pm.collectionVariables.get(\"todoId\")));",
+									"});",
+									"",
+									"// ตรวจลำดับ: ตัวก่อนหน้าต้องสร้างทีหลัง (หรือพร้อมกับ) ตัวถัดไปเสมอ",
+									"pm.test(\"Todos are ordered newest first\", function () {",
+									"  const todos = pm.response.json();",
+									"  for (let i = 1; i < todos.length; i++) {",
+									"    pm.expect(Date.parse(todos[i - 1].createdAt)).to.be.at.least(Date.parse(todos[i].createdAt));",
+									"  }",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/todos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos"
+							]
+						},
+						"description": "ดึง todo ทั้งหมด ต้องได้ 200 เป็น array ของ Todo ที่มี todo ที่เพิ่งสร้างอยู่ด้วย และเรียงจากใหม่ไปเก่า (createdAt มากไปน้อย)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get todo by id",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is a Todo object\", function () {",
+									"  const todo = pm.response.json();",
+									"  pm.expect(todo).to.have.all.keys(\"id\", \"title\", \"completed\", \"createdAt\", \"updatedAt\");",
+									"  pm.expect(todo.id).to.be.a(\"number\");",
+									"  pm.expect(todo.title).to.be.a(\"string\");",
+									"  pm.expect(todo.completed).to.be.a(\"boolean\");",
+									"  pm.expect(todo.createdAt).to.be.a(\"string\");",
+									"  pm.expect(todo.updatedAt).to.be.a(\"string\");",
+									"  pm.expect(Date.parse(todo.createdAt), \"createdAt is a valid date\").to.not.be.NaN;",
+									"  pm.expect(Date.parse(todo.updatedAt), \"updatedAt is a valid date\").to.not.be.NaN;",
+									"});",
+									"pm.test(\"Returns the todo we created\", function () {",
+									"  const todo = pm.response.json();",
+									"  pm.expect(todo.id).to.equal(Number(pm.collectionVariables.get(\"todoId\")));",
+									"  pm.expect(todo.title).to.include(\"Postman test todo\");",
+									"  pm.expect(todo.completed).to.equal(false);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/todos/{{todoId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos",
+								"{{todoId}}"
+							]
+						},
+						"description": "ดึง todo ตาม id ที่เพิ่งสร้าง ต้องได้ 200 และข้อมูลตรงกับที่สร้างไว้"
+					},
+					"response": []
+				},
+				{
+					"name": "Update title (PATCH)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is a Todo object\", function () {",
+									"  const todo = pm.response.json();",
+									"  pm.expect(todo).to.have.all.keys(\"id\", \"title\", \"completed\", \"createdAt\", \"updatedAt\");",
+									"  pm.expect(todo.id).to.be.a(\"number\");",
+									"  pm.expect(todo.title).to.be.a(\"string\");",
+									"  pm.expect(todo.completed).to.be.a(\"boolean\");",
+									"  pm.expect(todo.createdAt).to.be.a(\"string\");",
+									"  pm.expect(todo.updatedAt).to.be.a(\"string\");",
+									"  pm.expect(Date.parse(todo.createdAt), \"createdAt is a valid date\").to.not.be.NaN;",
+									"  pm.expect(Date.parse(todo.updatedAt), \"updatedAt is a valid date\").to.not.be.NaN;",
+									"});",
+									"pm.test(\"Title is updated and trimmed\", function () {",
+									"  const todo = pm.response.json();",
+									"  pm.expect(todo.id).to.equal(Number(pm.collectionVariables.get(\"todoId\")));",
+									"  pm.expect(todo.title).to.equal(\"Updated by Postman\");",
+									"  pm.expect(todo.completed).to.equal(false);",
+									"});",
+									"pm.test(\"updatedAt is not earlier than createdAt\", function () {",
+									"  const todo = pm.response.json();",
+									"  pm.expect(Date.parse(todo.updatedAt)).to.be.at.least(Date.parse(todo.createdAt));",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/todos/{{todoId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos",
+								"{{todoId}}"
+							]
+						},
+						"description": "แก้ชื่อ todo (มีช่องว่างหน้า-หลัง) ต้องได้ 200 ชื่อถูกตัดช่องว่างแล้ว และ updatedAt ต้องไม่น้อยกว่า createdAt",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"   Updated by Postman   \"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Mark as completed (PATCH)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is a Todo object\", function () {",
+									"  const todo = pm.response.json();",
+									"  pm.expect(todo).to.have.all.keys(\"id\", \"title\", \"completed\", \"createdAt\", \"updatedAt\");",
+									"  pm.expect(todo.id).to.be.a(\"number\");",
+									"  pm.expect(todo.title).to.be.a(\"string\");",
+									"  pm.expect(todo.completed).to.be.a(\"boolean\");",
+									"  pm.expect(todo.createdAt).to.be.a(\"string\");",
+									"  pm.expect(todo.updatedAt).to.be.a(\"string\");",
+									"  pm.expect(Date.parse(todo.createdAt), \"createdAt is a valid date\").to.not.be.NaN;",
+									"  pm.expect(Date.parse(todo.updatedAt), \"updatedAt is a valid date\").to.not.be.NaN;",
+									"});",
+									"pm.test(\"Todo is completed and title is unchanged\", function () {",
+									"  const todo = pm.response.json();",
+									"  pm.expect(todo.completed).to.equal(true);",
+									"  pm.expect(todo.title).to.equal(\"Updated by Postman\");",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/todos/{{todoId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos",
+								"{{todoId}}"
+							]
+						},
+						"description": "ทำเครื่องหมายว่าเสร็จแล้ว (completed = true) ต้องได้ 200 และชื่อเดิมไม่เปลี่ยน",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"completed\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Mark as not completed (PATCH)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is a Todo object\", function () {",
+									"  const todo = pm.response.json();",
+									"  pm.expect(todo).to.have.all.keys(\"id\", \"title\", \"completed\", \"createdAt\", \"updatedAt\");",
+									"  pm.expect(todo.id).to.be.a(\"number\");",
+									"  pm.expect(todo.title).to.be.a(\"string\");",
+									"  pm.expect(todo.completed).to.be.a(\"boolean\");",
+									"  pm.expect(todo.createdAt).to.be.a(\"string\");",
+									"  pm.expect(todo.updatedAt).to.be.a(\"string\");",
+									"  pm.expect(Date.parse(todo.createdAt), \"createdAt is a valid date\").to.not.be.NaN;",
+									"  pm.expect(Date.parse(todo.updatedAt), \"updatedAt is a valid date\").to.not.be.NaN;",
+									"});",
+									"pm.test(\"Todo is not completed\", function () {",
+									"  const todo = pm.response.json();",
+									"  pm.expect(todo.completed).to.equal(false);",
+									"  pm.expect(todo.title).to.equal(\"Updated by Postman\");",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/todos/{{todoId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos",
+								"{{todoId}}"
+							]
+						},
+						"description": "ยกเลิกเครื่องหมายเสร็จ (completed = false) ต้องได้ 200",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"completed\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete todo",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 204\", function () {",
+									"  pm.response.to.have.status(204);",
+									"});",
+									"pm.test(\"Response body is empty\", function () {",
+									"  pm.expect(pm.response.text()).to.equal(\"\");",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/todos/{{todoId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos",
+								"{{todoId}}"
+							]
+						},
+						"description": "ลบ todo ที่สร้างไว้ ต้องได้ 204 และไม่มี body"
+					},
+					"response": []
+				},
+				{
+					"name": "Get deleted todo (404)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 404\", function () {",
+									"  pm.response.to.have.status(404);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is an error object { message: string }\", function () {",
+									"  const body = pm.response.json();",
+									"  pm.expect(body.message).to.be.a(\"string\").that.is.not.empty;",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/todos/{{todoId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos",
+								"{{todoId}}"
+							]
+						},
+						"description": "ดึง todo ที่ถูกลบไปแล้ว ต้องได้ 404 พร้อม { message }"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete again (404)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 404\", function () {",
+									"  pm.response.to.have.status(404);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is an error object { message: string }\", function () {",
+									"  const body = pm.response.json();",
+									"  pm.expect(body.message).to.be.a(\"string\").that.is.not.empty;",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/todos/{{todoId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos",
+								"{{todoId}}"
+							]
+						},
+						"description": "ลบ todo เดิมซ้ำอีกครั้ง ต้องได้ 404 เพราะไม่มีอยู่แล้ว"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. Validation & errors",
+			"description": "ทดสอบกรณีส่งข้อมูลผิดรูปแบบหรือ id ไม่ถูกต้อง server ต้องตอบ 400/404 พร้อม { message } และต้องไม่ตอบ 500",
+			"item": [
+				{
+					"name": "POST missing title (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"  pm.response.to.have.status(400);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is an error object { message: string }\", function () {",
+									"  const body = pm.response.json();",
+									"  pm.expect(body.message).to.be.a(\"string\").that.is.not.empty;",
+									"});",
+									"",
+									"// กันข้อมูลขยะ: ถ้า server สร้าง todo ขึ้นมาโดยผิดพลาด (201) ให้ลบทิ้งทันที",
+									"if (pm.response.code === 201) {",
+									"  pm.sendRequest({",
+									"    url: pm.variables.get(\"baseUrl\") + \"/todos/\" + pm.response.json().id,",
+									"    method: \"DELETE\"",
+									"  });",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/todos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos"
+							]
+						},
+						"description": "สร้าง todo โดยไม่ส่ง title ต้องได้ 400",
+						"body": {
+							"mode": "raw",
+							"raw": "{}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST whitespace-only title (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"  pm.response.to.have.status(400);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is an error object { message: string }\", function () {",
+									"  const body = pm.response.json();",
+									"  pm.expect(body.message).to.be.a(\"string\").that.is.not.empty;",
+									"});",
+									"",
+									"// กันข้อมูลขยะ: ถ้า server สร้าง todo ขึ้นมาโดยผิดพลาด (201) ให้ลบทิ้งทันที",
+									"if (pm.response.code === 201) {",
+									"  pm.sendRequest({",
+									"    url: pm.variables.get(\"baseUrl\") + \"/todos/\" + pm.response.json().id,",
+									"    method: \"DELETE\"",
+									"  });",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/todos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos"
+							]
+						},
+						"description": "สร้าง todo ที่ title มีแต่ช่องว่าง (หลังตัดช่องว่างแล้วเป็นค่าว่าง) ต้องได้ 400",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"     \"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST title too long (400)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// สร้างข้อความยาว 256 ตัวอักษร (เกินกว่าที่อนุญาต 1 ตัว)",
+									"pm.variables.set(\"longTitle\", \"a\".repeat(256));"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"  pm.response.to.have.status(400);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is an error object { message: string }\", function () {",
+									"  const body = pm.response.json();",
+									"  pm.expect(body.message).to.be.a(\"string\").that.is.not.empty;",
+									"});",
+									"",
+									"// กันข้อมูลขยะ: ถ้า server สร้าง todo ขึ้นมาโดยผิดพลาด (201) ให้ลบทิ้งทันที",
+									"if (pm.response.code === 201) {",
+									"  pm.sendRequest({",
+									"    url: pm.variables.get(\"baseUrl\") + \"/todos/\" + pm.response.json().id,",
+									"    method: \"DELETE\"",
+									"  });",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/todos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos"
+							]
+						},
+						"description": "สร้าง todo ที่ title ยาว 256 ตัวอักษร (เกิน 255) ต้องได้ 400 - ข้อความยาวสร้างใน Pre-request Script",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"{{longTitle}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST non-string title (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"  pm.response.to.have.status(400);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is an error object { message: string }\", function () {",
+									"  const body = pm.response.json();",
+									"  pm.expect(body.message).to.be.a(\"string\").that.is.not.empty;",
+									"});",
+									"",
+									"// กันข้อมูลขยะ: ถ้า server สร้าง todo ขึ้นมาโดยผิดพลาด (201) ให้ลบทิ้งทันที",
+									"if (pm.response.code === 201) {",
+									"  pm.sendRequest({",
+									"    url: pm.variables.get(\"baseUrl\") + \"/todos/\" + pm.response.json().id,",
+									"    method: \"DELETE\"",
+									"  });",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/todos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos"
+							]
+						},
+						"description": "สร้าง todo ที่ title เป็นตัวเลขแทนที่จะเป็น string ต้องได้ 400",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": 12345\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST malformed JSON (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"  pm.response.to.have.status(400);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is an error object { message: string }\", function () {",
+									"  const body = pm.response.json();",
+									"  pm.expect(body.message).to.be.a(\"string\").that.is.not.empty;",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/todos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos"
+							]
+						},
+						"description": "ส่ง body ที่เป็น JSON ไม่สมบูรณ์ (ขาดปีกกาปิด) ต้องได้ 400 ไม่ใช่ 500",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"missing closing brace\"\n",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create todo for validation tests",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"  pm.response.to.have.status(201);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is a Todo object\", function () {",
+									"  const todo = pm.response.json();",
+									"  pm.expect(todo).to.have.all.keys(\"id\", \"title\", \"completed\", \"createdAt\", \"updatedAt\");",
+									"  pm.expect(todo.id).to.be.a(\"number\");",
+									"  pm.expect(todo.title).to.be.a(\"string\");",
+									"  pm.expect(todo.completed).to.be.a(\"boolean\");",
+									"  pm.expect(todo.createdAt).to.be.a(\"string\");",
+									"  pm.expect(todo.updatedAt).to.be.a(\"string\");",
+									"  pm.expect(Date.parse(todo.createdAt), \"createdAt is a valid date\").to.not.be.NaN;",
+									"  pm.expect(Date.parse(todo.updatedAt), \"updatedAt is a valid date\").to.not.be.NaN;",
+									"});",
+									"",
+									"// เก็บ id ของ todo ที่สร้างไว้ในตัวแปร todoId เพื่อใช้ใน request ถัดไป",
+									"if (pm.response.code === 201) {",
+									"  pm.collectionVariables.set(\"todoId\", pm.response.json().id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/todos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos"
+							]
+						},
+						"description": "สร้าง todo ไว้ใช้ทดสอบ PATCH ที่ผิดรูปแบบด้านล่าง (จะถูกลบใน request สุดท้ายของโฟลเดอร์นี้)",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Postman validation todo\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PATCH empty body (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"  pm.response.to.have.status(400);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is an error object { message: string }\", function () {",
+									"  const body = pm.response.json();",
+									"  pm.expect(body.message).to.be.a(\"string\").that.is.not.empty;",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/todos/{{todoId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos",
+								"{{todoId}}"
+							]
+						},
+						"description": "แก้ todo โดยส่ง body ว่าง {} (ไม่มีทั้ง title และ completed) ต้องได้ 400",
+						"body": {
+							"mode": "raw",
+							"raw": "{}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PATCH completed not boolean (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"  pm.response.to.have.status(400);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is an error object { message: string }\", function () {",
+									"  const body = pm.response.json();",
+									"  pm.expect(body.message).to.be.a(\"string\").that.is.not.empty;",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/todos/{{todoId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos",
+								"{{todoId}}"
+							]
+						},
+						"description": "แก้ todo โดยส่ง completed เป็น \"yes\" (string) แทน boolean ต้องได้ 400",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"completed\": \"yes\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET invalid id abc (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"  pm.response.to.have.status(400);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is an error object { message: string }\", function () {",
+									"  const body = pm.response.json();",
+									"  pm.expect(body.message).to.be.a(\"string\").that.is.not.empty;",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/todos/abc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos",
+								"abc"
+							]
+						},
+						"description": "ส่ง id ที่ไม่ใช่ตัวเลข ต้องได้ 400 (ไม่ใช่ 500)"
+					},
+					"response": []
+				},
+				{
+					"name": "GET invalid id 0 (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"  pm.response.to.have.status(400);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is an error object { message: string }\", function () {",
+									"  const body = pm.response.json();",
+									"  pm.expect(body.message).to.be.a(\"string\").that.is.not.empty;",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/todos/0",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos",
+								"0"
+							]
+						},
+						"description": "ส่ง id = 0 ซึ่งไม่ใช่ id ที่ถูกต้อง (id เริ่มที่ 1) ต้องได้ 400"
+					},
+					"response": []
+				},
+				{
+					"name": "GET id out of range (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"  pm.response.to.have.status(400);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is an error object { message: string }\", function () {",
+									"  const body = pm.response.json();",
+									"  pm.expect(body.message).to.be.a(\"string\").that.is.not.empty;",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/todos/2147483648",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos",
+								"2147483648"
+							]
+						},
+						"description": "ส่ง id = 2147483648 ซึ่งเกินค่าสูงสุดของ INTEGER ใน PostgreSQL ต้องได้ 400 (ไม่ใช่ 500)"
+					},
+					"response": []
+				},
+				{
+					"name": "GET badly encoded id %ZZ (400)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 400\", function () {",
+									"  pm.response.to.have.status(400);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is an error object { message: string }\", function () {",
+									"  const body = pm.response.json();",
+									"  pm.expect(body.message).to.be.a(\"string\").that.is.not.empty;",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/todos/%ZZ",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos",
+								"%ZZ"
+							]
+						},
+						"description": "ส่ง id ที่มีเครื่องหมาย % แต่ถอดรหัสไม่ได้ (Express อ่าน URL นี้ไม่ออก) ต้องได้ 400 ไม่ใช่ 500"
+					},
+					"response": []
+				},
+				{
+					"name": "GET non-existent id (404)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 404\", function () {",
+									"  pm.response.to.have.status(404);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is an error object { message: string }\", function () {",
+									"  const body = pm.response.json();",
+									"  pm.expect(body.message).to.be.a(\"string\").that.is.not.empty;",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/todos/999999999",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos",
+								"999999999"
+							]
+						},
+						"description": "ดึง todo ที่ id ถูกรูปแบบแต่ไม่มีอยู่ในฐานข้อมูล ต้องได้ 404"
+					},
+					"response": []
+				},
+				{
+					"name": "PATCH non-existent id (404)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 404\", function () {",
+									"  pm.response.to.have.status(404);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Body is an error object { message: string }\", function () {",
+									"  const body = pm.response.json();",
+									"  pm.expect(body.message).to.be.a(\"string\").that.is.not.empty;",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/todos/999999999",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos",
+								"999999999"
+							]
+						},
+						"description": "แก้ todo ที่ไม่มีอยู่ (body ถูกต้อง) ต้องได้ 404",
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"completed\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Unknown route (404)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 404\", function () {",
+									"  pm.response.to.have.status(404);",
+									"});",
+									"pm.test(\"Content-Type is application/json\", function () {",
+									"  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/json\");",
+									"});",
+									"pm.test(\"Message is Not found\", function () {",
+									"  pm.expect(pm.response.json().message).to.equal(\"Not found\");",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/nope",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"nope"
+							]
+						},
+						"description": "เรียก path ที่ไม่มีอยู่ ต้องได้ 404 และ message = \"Not found\""
+					},
+					"response": []
+				},
+				{
+					"name": "Delete validation todo (cleanup)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status code is 204\", function () {",
+									"  pm.response.to.have.status(204);",
+									"});",
+									"pm.test(\"Response body is empty\", function () {",
+									"  pm.expect(pm.response.text()).to.equal(\"\");",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/todos/{{todoId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"todos",
+								"{{todoId}}"
+							]
+						},
+						"description": "ลบ todo ที่สร้างไว้สำหรับทดสอบในโฟลเดอร์นี้ ให้ฐานข้อมูลกลับเป็นเหมือนก่อนรัน"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3000/api",
+			"type": "string"
+		},
+		{
+			"key": "todoId",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
